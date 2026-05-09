@@ -5,20 +5,20 @@ from pathlib import Path
 import config
 
 _IMPORTANCE_COLOR = {
-    5: "#dc2626",  # red
-    4: "#ea580c",  # orange
-    3: "#2563eb",  # blue
-    2: "#6b7280",  # gray
-    1: "#9ca3af",  # light gray
+    5: "#0f2a43",
+    4: "#334155",
+    3: "#64748b",
+    2: "#94a3b8",
+    1: "#cbd5e1",
 }
 
 _CATEGORY_BADGE = {
-    "Action Required": "#dc2626",
-    "Internship":      "#7c3aed",
-    "Meeting":         "#0891b2",
-    "School":          "#065f46",
-    "FYI":             "#374151",
-    "Spam/Promo":      "#9ca3af",
+    "Action Required": "#0f2a43",
+    "Internship":      "#475569",
+    "Meeting":         "#475569",
+    "School":          "#475569",
+    "FYI":             "#64748b",
+    "Spam/Promo":      "#94a3b8",
 }
 
 
@@ -41,24 +41,27 @@ def _email_card(e: dict) -> str:
     cat = e.get("category", "FYI")
     badge_color = _CATEGORY_BADGE.get(cat, "#374151")
     source_icon = "G" if e["source"] == "Gmail" else "O"
-    source_color = "#ea4335" if e["source"] == "Gmail" else "#0078d4"
+    source_label = "Gmail" if e["source"] == "Gmail" else "Outlook"
     unread_dot = '<span class="unread-dot"></span>' if e.get("unread") else ""
 
     return f"""
-    <div class="email-card" style="border-left: 4px solid {color};">
+    <article class="email-card" style="border-left-color: {color};">
       <div class="card-header">
-        <span class="source-badge" style="background:{source_color}">{source_icon}</span>
         {unread_dot}
         <span class="from">{html.escape(e['from'][:60])}</span>
         <span class="time">{_fmt_time(e['received_at'])}</span>
       </div>
       <div class="subject">{html.escape(e['subject'])}</div>
       <div class="one-liner">{html.escape(e.get('one_liner', e.get('snippet', ''))[:200])}</div>
-      <div class="badges">
-        <span class="badge" style="background:{badge_color}">{html.escape(cat)}</span>
-        <span class="imp-label" style="color:{color}">{_importance_label(imp)}</span>
+      <div class="meta-row">
+        <span class="source-badge">{source_icon}</span>
+        <span>{source_label}</span>
+        <span class="meta-divider">/</span>
+        <span class="badge" style="color:{badge_color}; border-color:{badge_color};">{html.escape(cat)}</span>
+        <span class="meta-divider">/</span>
+        <span class="imp-label" style="color:{color};">{_importance_label(imp)}</span>
       </div>
-    </div>"""
+    </article>"""
 
 
 def render(emails: list[dict], output_path: Path) -> None:
@@ -81,68 +84,232 @@ def render(emails: list[dict], output_path: Path) -> None:
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Morning Brief — {date_str}</title>
+<title>Morning Brief - {date_str}</title>
 <style>
   :root {{
-    --bg: #0f172a; --surface: #1e293b; --border: #334155;
-    --text: #f1f5f9; --muted: #94a3b8;
-    --accent: #38bdf8;
+    --page: #f6f7f9;
+    --surface: #ffffff;
+    --text: #172033;
+    --muted: #64748b;
+    --faint: #e5e7eb;
+    --accent: #0f2a43;
+    --accent-soft: #eef3f7;
   }}
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          background: var(--bg); color: var(--text); padding: 32px 24px; }}
-  h1 {{ font-size: 2rem; font-weight: 700; color: var(--accent); }}
-  .subtitle {{ color: var(--muted); margin-top: 4px; font-size: 0.9rem; }}
-  .stats {{ display: flex; gap: 20px; margin: 20px 0 32px;
-            font-size: 0.85rem; color: var(--muted); }}
-  .stats span b {{ color: var(--text); }}
-  h2 {{ font-size: 1.1rem; font-weight: 600; margin-bottom: 12px;
-        text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }}
-  .section {{ margin-bottom: 40px; }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 32px 18px;
+  }}
+  .container {{
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--faint);
+  }}
+  .inner {{ padding: 34px 38px 40px; }}
+  .brief-header {{
+    border-bottom: 1px solid var(--faint);
+    padding-bottom: 22px;
+    margin-bottom: 24px;
+  }}
+  .eyebrow {{
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    margin: 0 0 7px;
+    text-transform: uppercase;
+  }}
+  h1 {{
+    color: var(--text);
+    font-size: 28px;
+    font-weight: 650;
+    letter-spacing: 0;
+    line-height: 1.2;
+    margin: 0;
+  }}
+  .subtitle {{
+    color: var(--muted);
+    font-size: 14px;
+    margin: 8px 0 0;
+  }}
+  .stats {{
+    border-bottom: 1px solid var(--faint);
+    color: var(--muted);
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 0 0 30px;
+    padding-bottom: 24px;
+  }}
+  .stat {{
+    min-width: 0;
+  }}
+  .stat b {{
+    color: var(--accent);
+    display: block;
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.1;
+  }}
+  .stat span {{
+    display: block;
+    font-size: 12px;
+    letter-spacing: .02em;
+    margin-top: 4px;
+    text-transform: uppercase;
+  }}
+  h2 {{
+    align-items: center;
+    color: var(--accent);
+    display: flex;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    line-height: 1.3;
+    margin: 0 0 14px;
+    text-transform: uppercase;
+  }}
+  h2:after {{
+    background: var(--faint);
+    content: "";
+    flex: 1;
+    height: 1px;
+    margin-left: 14px;
+  }}
+  .section {{ margin-bottom: 34px; }}
+  .section:last-child {{ margin-bottom: 0; }}
   .email-card {{
-    background: var(--surface); border-radius: 8px; padding: 14px 16px;
-    margin-bottom: 10px; border-left: 4px solid #6b7280;
+    background: #fff;
+    border: 1px solid var(--faint);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    margin-bottom: 12px;
+    padding: 15px 17px 16px;
   }}
-  .card-header {{ display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }}
+  .card-header {{
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 5px;
+  }}
   .source-badge {{
-    width: 20px; height: 20px; border-radius: 4px; font-size: 11px; font-weight: 700;
-    color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    align-items: center;
+    background: var(--accent-soft);
+    border: 1px solid #d7e0e8;
+    border-radius: 4px;
+    color: var(--accent);
+    display: inline-flex;
+    font-size: 11px;
+    font-weight: 700;
+    height: 20px;
+    justify-content: center;
+    line-height: 1;
+    width: 20px;
   }}
   .unread-dot {{
-    width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+    background: var(--accent);
+    border-radius: 50%;
+    flex-shrink: 0;
+    height: 7px;
+    width: 7px;
   }}
-  .from {{ font-size: 0.85rem; color: var(--muted); flex: 1; white-space: nowrap;
-           overflow: hidden; text-overflow: ellipsis; }}
-  .time {{ font-size: 0.8rem; color: var(--muted); flex-shrink: 0; }}
-  .subject {{ font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }}
-  .one-liner {{ font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }}
-  .badges {{ display: flex; gap: 8px; align-items: center; }}
+  .from {{
+    color: #475569;
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }}
+  .time {{
+    color: var(--muted);
+    flex-shrink: 0;
+    font-size: 12px;
+  }}
+  .subject {{
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.4;
+    margin-bottom: 5px;
+  }}
+  .one-liner {{
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.55;
+    margin-bottom: 11px;
+  }}
+  .meta-row {{
+    align-items: center;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 12px;
+    gap: 7px;
+    line-height: 1.3;
+  }}
+  .meta-divider {{
+    color: #cbd5e1;
+  }}
   .badge {{
-    font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: #fff;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 650;
+    padding: 2px 8px;
   }}
-  .imp-label {{ font-size: 0.75rem; font-weight: 700; }}
-  .empty {{ color: var(--muted); font-size: 0.9rem; padding: 12px 0; }}
-  .urgent-section h2 {{ color: #fca5a5; }}
+  .imp-label {{
+    font-size: 12px;
+    font-weight: 700;
+  }}
+  .empty {{
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0;
+    padding: 4px 0 12px;
+  }}
+  @media (max-width: 520px) {{
+    body {{ padding: 0; }}
+    .container {{ border-left: 0; border-right: 0; }}
+    .inner {{ padding: 26px 20px 32px; }}
+    .stats {{ grid-template-columns: 1fr; }}
+    h1 {{ font-size: 25px; }}
+  }}
 </style>
 </head>
 <body>
-  <h1>Morning Brief</h1>
-  <p class="subtitle">{date_str} &nbsp;·&nbsp; Generated at {time_str}</p>
+  <div class="container">
+    <div class="inner">
+      <header class="brief-header">
+        <p class="eyebrow">{date_str}</p>
+        <h1>Morning Brief</h1>
+        <p class="subtitle">Generated at {time_str}</p>
+      </header>
 
-  <div class="stats">
-    <span><b>{total}</b> emails in last 24h</span>
-    <span><b>{unread}</b> unread</span>
-    <span><b>{gmail_count}</b> Gmail &nbsp; <b>{outlook_count}</b> Outlook</span>
-  </div>
+      <div class="stats">
+        <div class="stat"><b>{total}</b><span>Emails in last 24h</span></div>
+        <div class="stat"><b>{unread}</b><span>Unread</span></div>
+        <div class="stat"><b>{gmail_count} / {outlook_count}</b><span>Gmail / Outlook</span></div>
+      </div>
 
-  <div class="section urgent-section">
-    <h2>🔴 Needs Attention</h2>
-    {urgent_html}
-  </div>
+      <section class="section urgent-section">
+        <h2>Needs Attention</h2>
+        {urgent_html}
+      </section>
 
-  <div class="section">
-    <h2>📬 Everything Else</h2>
-    {rest_html}
+      <section class="section">
+        <h2>Everything Else</h2>
+        {rest_html}
+      </section>
+    </div>
   </div>
 </body>
 </html>"""
