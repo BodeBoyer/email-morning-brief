@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.bodeb.morningbrief</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/bodeb/email-morning-brief/venv/bin/python</string>
+    <string>/Users/bodeb/email-morning-brief/main.py</string>
+  </array>
+
+  <!-- Run at login -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Also run every morning at 7:30 AM if the computer is already on -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/bodeb/email-morning-brief</string>
+
+  <!-- Pass environment variables to the script -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ANTHROPIC_API_KEY</key>
+    <string>REPLACE_WITH_YOUR_ANTHROPIC_API_KEY</string>
+    <key>OUTLOOK_CLIENT_ID</key>
+    <string>REPLACE_WITH_YOUR_AZURE_CLIENT_ID</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/Users/bodeb/email-morning-brief/venv/bin</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/bodeb/email-morning-brief/logs/morning-brief.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/bodeb/email-morning-brief/logs/morning-brief-error.log</string>
+</dict>
+</plist>
