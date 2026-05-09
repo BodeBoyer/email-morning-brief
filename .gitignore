@@ -6,3 +6,4 @@ output/
 logs/
 .DS_Store
 *.token.json
+com.bodeb.morningbrief.plist
