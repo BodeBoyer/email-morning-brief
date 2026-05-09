@@ -5,6 +5,7 @@ from pathlib import Path
 
 import msal
 import requests
+from typing import Optional
 
 import config
 
@@ -12,7 +13,7 @@ import config
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
-def _get_token() -> str | None:
+def _get_token() -> Optional[str]:
     if not config.OUTLOOK_CLIENT_ID:
         print("[Outlook] OUTLOOK_CLIENT_ID not set — skipping Outlook")
         return None
