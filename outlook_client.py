@@ -35,6 +35,9 @@ def _get_token() -> str | None:
     if not result:
         # Device-code flow works even when redirect URIs are restricted
         flow = app.initiate_device_flow(scopes=config.OUTLOOK_SCOPES)
+        if "error" in flow:
+            print(f"[Outlook] Device flow init failed: {flow.get('error_description', flow['error'])}")
+            return None
         print("\n[Outlook] To authenticate, visit:", flow["verification_uri"])
         print("[Outlook] Enter code:", flow["user_code"])
         result = app.acquire_token_by_device_flow(flow)
@@ -58,7 +61,7 @@ def fetch_emails(lookback_hours: int = 24) -> list[dict]:
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    auth_headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     params = {
         "$filter": f"receivedDateTime ge {since}",
         "$select": "id,subject,from,receivedDateTime,bodyPreview,isRead",
@@ -66,26 +69,40 @@ def fetch_emails(lookback_hours: int = 24) -> list[dict]:
         "$top": 50,
     }
 
-    resp = requests.get(f"{_GRAPH_BASE}/me/mailFolders/inbox/messages", headers=headers, params=params)
+    resp = requests.get(
+        f"{_GRAPH_BASE}/me/mailFolders/inbox/messages",
+        headers=auth_headers,
+        params=params,
+    )
     if resp.status_code != 200:
         print(f"[Outlook] API error {resp.status_code}: {resp.text[:200]}")
         return []
 
     emails = []
-    for msg in resp.json().get("value", []):
-        sender = msg.get("from", {}).get("emailAddress", {})
-        received_dt = datetime.fromisoformat(msg["receivedDateTime"].replace("Z", "+00:00"))
+    data = resp.json()
 
-        emails.append({
-            "source": "Outlook",
-            "id": msg["id"],
-            "from": f"{sender.get('name', '')} <{sender.get('address', '')}>",
-            "subject": msg.get("subject", "(no subject)"),
-            "snippet": msg.get("bodyPreview", ""),
-            "body_preview": msg.get("bodyPreview", ""),
-            "received_at": received_dt.isoformat(),
-            "received_ts": received_dt.timestamp(),
-            "unread": not msg.get("isRead", True),
-        })
+    while True:
+        for msg in data.get("value", []):
+            sender = msg.get("from", {}).get("emailAddress", {})
+            received_dt = datetime.fromisoformat(msg["receivedDateTime"].replace("Z", "+00:00"))
+            emails.append({
+                "source": "Outlook",
+                "id": msg["id"],
+                "from": f"{sender.get('name', '')} <{sender.get('address', '')}>",
+                "subject": msg.get("subject", "(no subject)"),
+                "snippet": msg.get("bodyPreview", ""),
+                "body_preview": msg.get("bodyPreview", ""),
+                "received_at": received_dt.isoformat(),
+                "received_ts": received_dt.timestamp(),
+                "unread": not msg.get("isRead", True),
+            })
+
+        next_link = data.get("@odata.nextLink")
+        if not next_link or len(emails) >= 200:
+            break
+        resp = requests.get(next_link, headers=auth_headers)
+        if resp.status_code != 200:
+            break
+        data = resp.json()
 
     return emails

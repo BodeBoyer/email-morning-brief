@@ -55,8 +55,12 @@ def fetch_emails(lookback_hours: int = 24) -> list[dict]:
     after_ts = int((datetime.now(timezone.utc) - timedelta(hours=lookback_hours)).timestamp())
     query = f"after:{after_ts}"
 
-    results = service.users().messages().list(userId="me", q=query, maxResults=50).execute()
-    messages = results.get("messages", [])
+    messages = []
+    request = service.users().messages().list(userId="me", q=query, maxResults=50)
+    while request and len(messages) < 200:
+        results = request.execute()
+        messages.extend(results.get("messages", []))
+        request = service.users().messages().list_next(request, results)
 
     emails = []
     for msg_ref in messages:

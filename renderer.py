@@ -55,7 +55,7 @@ def _email_card(e: dict) -> str:
       <div class="subject">{html.escape(e['subject'])}</div>
       <div class="one-liner">{html.escape(e.get('one_liner', e.get('snippet', ''))[:200])}</div>
       <div class="badges">
-        <span class="badge" style="background:{badge_color}">{cat}</span>
+        <span class="badge" style="background:{badge_color}">{html.escape(cat)}</span>
         <span class="imp-label" style="color:{color}">{_importance_label(imp)}</span>
       </div>
     </div>"""

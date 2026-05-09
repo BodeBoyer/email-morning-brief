@@ -27,13 +27,17 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
             e["importance"] = 3 if e.get("unread") else 1
             e["category"] = "FYI"
             e["one_liner"] = e["snippet"][:120]
+        emails.sort(key=lambda x: (-x["importance"], not x.get("unread", False), -x["received_ts"]))
         return emails
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
+    # Interleave by recency so both sources get ranked when > MAX_EMAILS_TO_RANK total
+    candidates = sorted(emails, key=lambda x: -x["received_ts"])[: config.MAX_EMAILS_TO_RANK]
+
     # Build compact email list for Claude — keep cost low
     email_list = []
-    for e in emails[: config.MAX_EMAILS_TO_RANK]:
+    for e in candidates:
         email_list.append({
             "id": e["id"],
             "from": e["from"],
@@ -70,7 +74,16 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
             raw = raw[4:]
     raw = raw.strip("` \n")
 
-    ranked = json.loads(raw)
+    try:
+        ranked = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"[Claude] Failed to parse response as JSON ({exc}) — falling back to snippet defaults")
+        for e in emails:
+            e.setdefault("importance", 2)
+            e.setdefault("category", "FYI")
+            e.setdefault("one_liner", e["snippet"][:120])
+        emails.sort(key=lambda x: (-x["importance"], not x.get("unread", False), -x["received_ts"]))
+        return emails
 
     ranked_by_id = {r["id"]: r for r in ranked}
     for e in emails:
