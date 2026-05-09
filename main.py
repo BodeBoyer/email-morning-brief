@@ -42,9 +42,18 @@ def main():
     print(f"\nRanking {len(all_emails)} emails with Claude...")
     ranked = summarizer.rank_and_summarize(all_emails)
 
+    # Drop spam / clearly-unimportant emails entirely
+    filtered = [
+        e for e in ranked
+        if e.get("category") != "Spam/Promo" and e.get("importance", 2) > 1
+    ]
+    dropped = len(ranked) - len(filtered)
+    if dropped:
+        print(f"Filtered out {dropped} spam/low-importance emails")
+
     print(f"Rendering brief to {config.OUTPUT_HTML}...")
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    renderer.render(ranked, config.OUTPUT_HTML)
+    renderer.render(filtered, config.OUTPUT_HTML)
 
     print("Opening in browser...")
     subprocess.run(["open", str(config.OUTPUT_HTML)], check=False)
