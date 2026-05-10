@@ -61,6 +61,20 @@ CANVAS_TOKEN = _env("CANVAS_TOKEN") or _env("CANVAS_API_TOKEN")
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = _env("CLAUDE_MODEL", "claude-sonnet-4-6")
 
+# Calendar + Tasks (sibling to Gmail OAuth — same client, different scopes/token)
+CALENDAR_TASKS_TOKEN_FILE = CREDENTIALS_DIR / "calendar_tasks_token.json"
+CALENDAR_TASKS_SCOPES = [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/tasks",
+]
+GOOGLE_CALENDAR_ID = _env("GOOGLE_CALENDAR_ID", "primary")
+GOOGLE_TASKLIST_ID = _env("GOOGLE_TASKLIST_ID", "@default")
+PUSH_TO_CALENDAR = _env("PUSH_TO_CALENDAR", "1").lower() in {"1", "true", "yes", "on"}
+PUSH_TO_TASKS = _env("PUSH_TO_TASKS", "1").lower() in {"1", "true", "yes", "on"}
+
+# IANA timezone for resolving relative dates ("tomorrow at 3pm") into absolute timestamps
+USER_TIMEZONE = _env("USER_TIMEZONE", "America/New_York")
+
 # How many hours back to look for emails
 LOOKBACK_HOURS = 24
 

@@ -136,7 +136,134 @@ def _summary_section(summary: str) -> str:
       </section>"""
 
 
-def render(emails: list[dict], output_path: Path, canvas: Optional[dict] = None, summary: str = "") -> None:
+def _fmt_event_time(start_iso: str, end_iso: str) -> str:
+    s = _parse_iso(start_iso)
+    e = _parse_iso(end_iso)
+    if not s:
+        return ""
+    s_local = s.astimezone()
+    out = s_local.strftime("%a, %b %-d at %-I:%M %p")
+    if e:
+        e_local = e.astimezone()
+        if e_local.date() == s_local.date():
+            out += f" – {e_local.strftime('%-I:%M %p')}"
+        else:
+            out += f" – {e_local.strftime('%a, %b %-d at %-I:%M %p')}"
+    return out
+
+
+def _parse_iso(value: str):
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _fmt_due_date(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        d = datetime.fromisoformat(value).date()
+        return d.strftime("%a, %b %-d")
+    except (ValueError, TypeError):
+        return value
+
+
+def _event_card(ev: dict) -> str:
+    title = ev.get("title", "")
+    when = _fmt_event_time(ev.get("start", ""), ev.get("end", ""))
+    link = ev.get("html_link") or ""
+    skipped = ev.get("skipped")
+    error = ev.get("error")
+
+    status_html = ""
+    if skipped == "duplicate":
+        status_html = '<span class="badge status-skip">Already on calendar</span>'
+    elif skipped:
+        status_html = f'<span class="badge status-skip">Skipped: {html.escape(skipped)}</span>'
+    elif error:
+        status_html = f'<span class="badge status-err">Error: {html.escape(str(error)[:60])}</span>'
+    else:
+        status_html = '<span class="badge status-ok">Added to Calendar</span>'
+
+    link_html = ""
+    if link:
+        link_html = f'<span class="meta-divider">/</span><a href="{html.escape(link, quote=True)}">Open in Calendar</a>'
+
+    return f"""
+    <article class="brief-card">
+      <div class="item-title">{html.escape(title)}</div>
+      <div class="item-detail">{html.escape(when)}</div>
+      <div class="meta-row">
+        {status_html}
+        {link_html}
+      </div>
+    </article>"""
+
+
+def _task_card(t: dict) -> str:
+    title = t.get("title", "")
+    due = _fmt_due_date(t.get("due", ""))
+    skipped = t.get("skipped")
+    error = t.get("error")
+
+    status_html = ""
+    if skipped == "duplicate":
+        status_html = '<span class="badge status-skip">Already in Tasks</span>'
+    elif skipped:
+        status_html = f'<span class="badge status-skip">Skipped: {html.escape(skipped)}</span>'
+    elif error:
+        status_html = f'<span class="badge status-err">Error: {html.escape(str(error)[:60])}</span>'
+    else:
+        status_html = '<span class="badge status-ok">Added to Tasks</span>'
+
+    due_html = f"<span>Due {html.escape(due)}</span>" if due else "<span>No due date</span>"
+
+    return f"""
+    <article class="brief-card">
+      <div class="item-title">{html.escape(title)}</div>
+      <div class="meta-row">
+        {due_html}
+        <span class="meta-divider">/</span>
+        {status_html}
+      </div>
+    </article>"""
+
+
+def _events_section(events: Optional[list]) -> str:
+    if not events:
+        return ""
+    cards = "".join(_event_card(e) for e in events)
+    return f"""
+      <section class="section">
+        <h2>Calendar Events</h2>
+        {cards}
+      </section>"""
+
+
+def _tasks_section(tasks: Optional[list]) -> str:
+    if not tasks:
+        return ""
+    cards = "".join(_task_card(t) for t in tasks)
+    return f"""
+      <section class="section">
+        <h2>To-Dos</h2>
+        {cards}
+      </section>"""
+
+
+def render(
+    emails: list[dict],
+    output_path: Path,
+    canvas: Optional[dict] = None,
+    summary: str = "",
+    events: Optional[list] = None,
+    tasks: Optional[list] = None,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now()
@@ -150,11 +277,12 @@ def render(emails: list[dict], output_path: Path, canvas: Optional[dict] = None,
     rest_html   = "".join(_email_card(e) for e in rest)   or "<p class='empty'>No other emails.</p>"
     canvas_html = _canvas_section(canvas)
     summary_html = _summary_section(summary)
+    events_html  = _events_section(events)
+    tasks_html   = _tasks_section(tasks)
 
     total = len(emails)
     unread = sum(1 for e in emails if e.get("unread"))
-    gmail_count   = sum(1 for e in emails if e["source"] == "Gmail")
-    outlook_count = sum(1 for e in emails if e["source"] == "Outlook")
+    important = sum(1 for e in emails if e.get("importance", 0) >= 4)
 
     html_out = f"""<!DOCTYPE html>
 <html lang="en">
@@ -397,6 +525,21 @@ def render(emails: list[dict], output_path: Path, canvas: Optional[dict] = None,
     font-size: 12px;
     font-weight: 700;
   }}
+  .status-ok {{
+    background: #dcfce7;
+    border-color: #16a34a;
+    color: #166534;
+  }}
+  .status-skip {{
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #475569;
+  }}
+  .status-err {{
+    background: #fee2e2;
+    border-color: #dc2626;
+    color: #991b1b;
+  }}
   .empty {{
     color: var(--muted);
     font-size: 14px;
@@ -424,10 +567,14 @@ def render(emails: list[dict], output_path: Path, canvas: Optional[dict] = None,
       <div class="stats">
         <div class="stat"><b>{total}</b><span>Emails in last 24h</span></div>
         <div class="stat"><b>{unread}</b><span>Unread</span></div>
-        <div class="stat"><b>{gmail_count} / {outlook_count}</b><span>Gmail / Outlook</span></div>
+        <div class="stat"><b>{important}</b><span>Needs attention</span></div>
       </div>
 
       {summary_html}
+
+      {events_html}
+
+      {tasks_html}
 
       {canvas_html}
 

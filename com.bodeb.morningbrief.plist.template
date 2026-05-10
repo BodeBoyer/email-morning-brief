@@ -36,8 +36,6 @@
   <dict>
     <key>ANTHROPIC_API_KEY</key>
     <string>REPLACE_WITH_YOUR_ANTHROPIC_API_KEY</string>
-    <key>OUTLOOK_CLIENT_ID</key>
-    <string>REPLACE_WITH_YOUR_AZURE_CLIENT_ID</string>
     <key>PATH</key>
     <string>/usr/local/bin:/usr/bin:/bin:/Users/bodeb/email-morning-brief/venv/bin</string>
   </dict>

@@ -51,6 +51,34 @@ def _decode_body(payload: dict) -> str:
     return ""
 
 
+# Substrings in the Received header chain that indicate the message was relayed
+# through Microsoft 365 / Outlook before reaching the aggregator inbox. Used to
+# tag forwarded UNC/work email as Outlook-origin instead of plain Gmail.
+_OUTLOOK_RECEIVED_MARKERS = (
+    "outbound.protection.outlook.com",
+    "protection.outlook.com",
+    "outlook.office365.com",
+    ".onmicrosoft.com",
+    "exchangelabs",
+)
+
+
+def _classify_source(payload: dict) -> str:
+    """Return 'Outlook' if the Received header chain shows an Outlook/M365 hop,
+    otherwise 'Gmail'. The aggregator inbox receives forwarded UNC/work mail
+    via Outlook, so this is what lets the brief distinguish the two without
+    a separate Microsoft Graph fetch.
+    """
+    received_blob = " ".join(
+        h.get("value", "")
+        for h in payload.get("headers", [])
+        if h.get("name", "").lower() == "received"
+    ).lower()
+    if any(marker in received_blob for marker in _OUTLOOK_RECEIVED_MARKERS):
+        return "Outlook"
+    return "Gmail"
+
+
 def fetch_emails(lookback_hours: int = 24) -> list[dict]:
     if not config.GMAIL_CREDENTIALS_FILE.exists():
         print("[Gmail] credentials file not found — skipping Gmail")
@@ -88,7 +116,7 @@ def fetch_emails(lookback_hours: int = 24) -> list[dict]:
             received_at = datetime.now(timezone.utc)
 
         emails.append({
-            "source": "Gmail",
+            "source": _classify_source(msg["payload"]),
             "id": msg_ref["id"],
             "from": headers.get("From", "Unknown"),
             "subject": headers.get("Subject", "(no subject)"),
