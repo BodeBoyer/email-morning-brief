@@ -8,7 +8,6 @@ import gmail_client
 import outlook_client
 import summarizer
 import renderer
-import sports_client
 import canvas_client
 
 
@@ -18,7 +17,6 @@ def main():
 
     gmail_emails = []
     outlook_emails = []
-    sports = {}
     canvas = {}
 
     try:
@@ -38,14 +36,6 @@ def main():
     all_emails = gmail_emails + outlook_emails
 
     try:
-        print("Fetching sports...")
-        sports = sports_client.fetch_sports_brief()
-        sports_count = sum(len(g.get("items", [])) for g in sports.get("groups", []))
-        print(f"  {sports_count} sports items")
-    except Exception as e:
-        print(f"  Sports error: {e}")
-
-    try:
         print("Fetching Canvas...")
         canvas = canvas_client.fetch_assignments()
         canvas_count = sum(len(g.get("items", [])) for g in canvas.get("groups", []))
@@ -53,13 +43,14 @@ def main():
     except Exception as e:
         print(f"  Canvas error: {e}")
 
+    summary = ""
     if not all_emails:
-        print("\nNo emails found. Rendering brief with sports and Canvas sections.")
+        print("\nNo emails found. Rendering brief with Canvas section.")
         ranked = []
     else:
         print(f"\nRanking {len(all_emails)} emails with Claude...")
         try:
-            ranked = summarizer.rank_and_summarize(all_emails)
+            ranked, summary = summarizer.rank_and_summarize(all_emails)
         except Exception as e:
             print(f"  Claude ranking error: {e}")
             ranked = all_emails
@@ -79,7 +70,7 @@ def main():
 
     print(f"Rendering brief to {config.OUTPUT_HTML}...")
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    renderer.render(filtered, config.OUTPUT_HTML, sports=sports, canvas=canvas)
+    renderer.render(filtered, config.OUTPUT_HTML, canvas=canvas, summary=summary)
 
     print("Opening in browser...")
     subprocess.run(["open", str(config.OUTPUT_HTML)], check=False)

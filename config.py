@@ -59,7 +59,7 @@ CANVAS_TOKEN = _env("CANVAS_TOKEN") or _env("CANVAS_API_TOKEN")
 
 # Anthropic - set ANTHROPIC_API_KEY in environment
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
-CLAUDE_MODEL = _env("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+CLAUDE_MODEL = _env("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 # How many hours back to look for emails
 LOOKBACK_HOURS = 24

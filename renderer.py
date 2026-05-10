@@ -81,43 +81,6 @@ def _safe_link(url: str, label: str) -> str:
     return f'<a href="{escaped_url}">{html.escape(label)}</a>'
 
 
-def _sports_card(item: dict) -> str:
-    source = item.get("source", "Sports")
-    source_link = _safe_link(item.get("url", ""), source) or html.escape(source)
-    detail = item.get("detail", "")
-    detail_html = f"<div class='item-detail'>{html.escape(detail[:220])}</div>" if detail else ""
-    return f"""
-    <article class="brief-card">
-      <div class="item-title">{html.escape(item.get('title', ''))}</div>
-      {detail_html}
-      <div class="meta-row"><span class="source-badge">S</span><span>{source_link}</span></div>
-    </article>"""
-
-
-def _sports_section(sports: Optional[dict]) -> str:
-    groups = (sports or {}).get("groups", [])
-    group_html = []
-    for group in groups:
-        items = group.get("items", [])
-        if not items:
-            continue
-        cards = "".join(_sports_card(item) for item in items)
-        group_html.append(
-            f"""
-            <div class="brief-group">
-              <h3>{html.escape(group.get('title', 'Sports'))}</h3>
-              {cards}
-            </div>"""
-        )
-
-    body = "".join(group_html) or "<p class='empty'>No high-value sports updates found from the configured sources.</p>"
-    return f"""
-      <section class="section">
-        <h2>Sports</h2>
-        {body}
-      </section>"""
-
-
 def _canvas_card(item: dict) -> str:
     due = _fmt_due(item.get("due_at", ""))
     points = item.get("points")
@@ -163,7 +126,17 @@ def _canvas_section(canvas: Optional[dict]) -> str:
       </section>"""
 
 
-def render(emails: list[dict], output_path: Path, sports: Optional[dict] = None, canvas: Optional[dict] = None) -> None:
+def _summary_section(summary: str) -> str:
+    if not summary or not summary.strip():
+        return ""
+    return f"""
+      <section class="section summary-section">
+        <h2>Email Summary</h2>
+        <p class="summary-text">{html.escape(summary.strip())}</p>
+      </section>"""
+
+
+def render(emails: list[dict], output_path: Path, canvas: Optional[dict] = None, summary: str = "") -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now()
@@ -175,8 +148,8 @@ def render(emails: list[dict], output_path: Path, sports: Optional[dict] = None,
 
     urgent_html = "".join(_email_card(e) for e in urgent) or "<p class='empty'>Nothing urgent.</p>"
     rest_html   = "".join(_email_card(e) for e in rest)   or "<p class='empty'>No other emails.</p>"
-    sports_html = _sports_section(sports)
     canvas_html = _canvas_section(canvas)
+    summary_html = _summary_section(summary)
 
     total = len(emails)
     unread = sum(1 for e in emails if e.get("unread"))
@@ -288,6 +261,20 @@ def render(emails: list[dict], output_path: Path, sports: Optional[dict] = None,
   }}
   .section {{ margin-bottom: 34px; }}
   .section:last-child {{ margin-bottom: 0; }}
+  .summary-section {{
+    background: var(--accent-soft);
+    border: 1px solid #d7e0e8;
+    border-radius: 8px;
+    padding: 18px 20px 16px;
+  }}
+  .summary-section h2 {{ margin-bottom: 10px; }}
+  .summary-section h2:after {{ background: #c5d3df; }}
+  .summary-text {{
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0;
+  }}
   .email-card {{
     background: #fff;
     border: 1px solid var(--faint);
@@ -440,9 +427,9 @@ def render(emails: list[dict], output_path: Path, sports: Optional[dict] = None,
         <div class="stat"><b>{gmail_count} / {outlook_count}</b><span>Gmail / Outlook</span></div>
       </div>
 
-      {canvas_html}
+      {summary_html}
 
-      {sports_html}
+      {canvas_html}
 
       <section class="section urgent-section">
         <h2>Needs Attention</h2>

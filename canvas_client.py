@@ -45,6 +45,8 @@ def _is_submitted(assignment: dict) -> bool:
 
 def _get_assignments() -> list[dict]:
     courses = _canvas_get("/courses", {"enrollment_state": "active", "per_page": 100})
+    # Hide unsubmitted work that's been overdue for more than 3 weeks — stale to-dos clutter the brief.
+    stale_cutoff = datetime.now(_LOCAL_TZ) - timedelta(days=21)
     items = []
     for course in courses:
         if not isinstance(course, dict) or "id" not in course or "name" not in course:
@@ -56,6 +58,8 @@ def _get_assignments() -> list[dict]:
             if _is_submitted(a):
                 continue
             due = datetime.fromisoformat(a["due_at"].replace("Z", "+00:00")).astimezone(_LOCAL_TZ)
+            if due < stale_cutoff:
+                continue
             items.append({
                 "title": a.get("name", "Untitled"),
                 "course": course["name"],

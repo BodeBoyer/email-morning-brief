@@ -6,15 +6,29 @@ import config
 _SYSTEM_PROMPT = """You are an executive assistant helping a college student starting an internship next week.
 Your job: read a list of emails from the past 24 hours and produce a structured morning brief.
 
-For each email return a JSON object with:
-- "id": the original email id
-- "importance": integer 1-5 (5 = urgent/critical, 1 = newsletter/junk)
-- "category": one of ["Action Required", "FYI", "Meeting", "Internship", "School", "Spam/Promo"]
-- "one_liner": one short sentence capturing what the email is about and what (if anything) needs to happen
+Return a JSON object with two keys:
+- "summary": a 2-4 sentence plain-English overview of what arrived in the user's inbox. Lead with
+  anything urgent or action-required (replies needed, deadlines, interviews, grade changes with the
+  actual grade). Then briefly note what else is in the inbox (e.g. "plus a few class announcements
+  and newsletters"). Skip spam. Write to the user directly ("You got...", "Your..."). No headers,
+  no bullets — just sentences.
+- "emails": an array, one object per email, each containing:
+    - "id": the original email id
+    - "importance": integer 1-5 (5 = urgent/critical, 1 = newsletter/junk)
+    - "category": one of ["Action Required", "FYI", "Meeting", "Internship", "School", "Spam/Promo"]
+    - "one_liner": one short sentence capturing what the email is about and what (if anything) needs to happen
 
 High importance signals: your name mentioned, direct question, deadline, manager/recruiter/professor sending,
 words like "offer", "start date", "onboarding", "urgent", "please confirm", "interview", "grades".
-Low importance signals: newsletters, marketing, automated notifications, social media alerts."""
+Low importance signals: newsletters, marketing, automated notifications, social media alerts.
+
+Grade-related emails (subject or body mentioning "grade changed", "grade posted", "final course score",
+"final grade", or a Canvas/Sakai grade notification) are ALWAYS important — set importance >= 3 and
+category "School". For these, the one_liner MUST extract the concrete grade detail from the body:
+the course/assignment name and the actual score or letter (e.g. "COMP 211 final exam: 92/100",
+"COMP 110 final course score: A-", "Grade changed on Project 2: 85 -> 95"). Do not just say
+"a grade was posted" — pull the number or letter out of the body so the user can see their grade
+without opening the email. The top-level summary should also call out any grade changes by name and value."""
 
 _VALID_CATEGORIES = {"Action Required", "FYI", "Meeting", "Internship", "School", "Spam/Promo"}
 
@@ -41,13 +55,13 @@ def _sort_emails(emails: list[dict]) -> None:
     )
 
 
-def _apply_fallback(emails: list[dict], default_importance: int = 2) -> list[dict]:
+def _apply_fallback(emails: list[dict], default_importance: int = 2) -> tuple:
     for e in emails:
         e["importance"] = 3 if e.get("unread") else default_importance
         e["category"] = "FYI"
         e["one_liner"] = str(e.get("snippet", ""))[:120]
     _sort_emails(emails)
-    return emails
+    return emails, ""
 
 
 def _coerce_importance(value) -> int:
@@ -58,9 +72,10 @@ def _coerce_importance(value) -> int:
     return min(5, max(1, importance))
 
 
-def rank_and_summarize(emails: list[dict]) -> list[dict]:
+def rank_and_summarize(emails: list[dict]) -> tuple:
+    """Return (emails_with_ranking, overall_summary_text)."""
     if not emails:
-        return []
+        return [], ""
 
     if not config.ANTHROPIC_API_KEY:
         print("[Claude] ANTHROPIC_API_KEY not set — skipping AI ranking, using unread as proxy")
@@ -79,13 +94,14 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
             "from": e["from"],
             "subject": e["subject"],
             "snippet": e["snippet"][:300],
+            "body_preview": str(e.get("body_preview", ""))[:500],
             "source": e["source"],
             "unread": e.get("unread", False),
         })
 
     user_message = (
         "Here are the emails from the past 24 hours. "
-        "Return ONLY a JSON array of objects as described, one per email, no prose:\n\n"
+        "Return ONLY a JSON object with keys 'summary' and 'emails' as described, no prose:\n\n"
         + json.dumps(email_list, indent=2)
     )
 
@@ -109,13 +125,20 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
     raw = raw.strip("` \n")
 
     try:
-        ranked = json.loads(raw)
+        parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
         print(f"[Claude] Failed to parse response as JSON ({exc}) — falling back to snippet defaults")
         return _apply_fallback(emails)
 
-    if not isinstance(ranked, list):
-        print("[Claude] Response was not a JSON array — falling back to snippet defaults")
+    if isinstance(parsed, dict):
+        ranked = parsed.get("emails", [])
+        summary = str(parsed.get("summary", "")).strip()
+    elif isinstance(parsed, list):
+        # Backwards-compatible: old prompt shape
+        ranked = parsed
+        summary = ""
+    else:
+        print("[Claude] Response was not a JSON object or array — falling back to snippet defaults")
         return _apply_fallback(emails)
 
     ranked_by_id = {
@@ -133,4 +156,4 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
 
     # Sort: importance desc, then unread first, then recency
     _sort_emails(emails)
-    return emails
+    return emails, summary
