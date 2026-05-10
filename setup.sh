@@ -11,9 +11,23 @@ echo ""
 # Create log dir
 mkdir -p logs output credentials
 
+if [ ! -f com.bodeb.morningbrief.plist ] && [ -f com.bodeb.morningbrief.plist.template ]; then
+  cp com.bodeb.morningbrief.plist.template com.bodeb.morningbrief.plist
+fi
+
 # Create Python venv
 echo "Creating Python virtual environment..."
-python3 -m venv venv
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  for candidate in python3.12 python3.11 python3.10 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+echo "Using $($PYTHON_BIN --version)"
+"$PYTHON_BIN" -m venv venv
 source venv/bin/activate
 
 echo "Installing dependencies..."
@@ -39,17 +53,21 @@ echo "   d) Redirect URI: add 'https://login.microsoftonline.com/common/oauth2/n
 echo "   e) After creation, go to API permissions → Add → Microsoft Graph → Delegated"
 echo "      → add: Mail.Read, offline_access"
 echo "   f) Copy the Application (client) ID"
-echo "   g) Edit com.bodeb.morningbrief.plist → replace REPLACE_WITH_YOUR_AZURE_CLIENT_ID"
+echo "   g) Add OUTLOOK_CLIENT_ID to credentials/secrets.env, or edit com.bodeb.morningbrief.plist"
 echo ""
 echo "3. ANTHROPIC API KEY"
 echo "   a) Get key from: https://console.anthropic.com/"
-echo "   b) Edit com.bodeb.morningbrief.plist → replace REPLACE_WITH_YOUR_ANTHROPIC_API_KEY"
+echo "   b) Add ANTHROPIC_API_KEY to credentials/secrets.env, or edit com.bodeb.morningbrief.plist"
 echo ""
-echo "4. INSTALL LAUNCH AGENT (runs at login + 7:30 AM daily)"
+echo "4. OPTIONAL CANVAS SETUP"
+echo "   cp credentials/secrets.env.template credentials/secrets.env"
+echo "   Edit credentials/secrets.env with CANVAS_BASE_URL and CANVAS_TOKEN"
+echo ""
+echo "5. INSTALL LAUNCH AGENT (runs at login + 7:30 AM and 6:00 PM daily)"
 echo "   cp \"$DIR/com.bodeb.morningbrief.plist\" ~/Library/LaunchAgents/"
 echo "   launchctl load ~/Library/LaunchAgents/com.bodeb.morningbrief.plist"
 echo ""
-echo "5. FIRST RUN (triggers OAuth login for each account)"
+echo "6. FIRST RUN (triggers OAuth login for each account)"
 echo "   source venv/bin/activate && python main.py"
 echo ""
 echo "Setup complete. Follow the steps above, then run 'python main.py' to test."

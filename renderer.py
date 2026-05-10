@@ -1,6 +1,7 @@
 import html
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import config
 
@@ -35,6 +36,15 @@ def _fmt_time(iso: str) -> str:
         return ""
 
 
+def _fmt_due(iso: str) -> str:
+    try:
+        dt = datetime.fromisoformat(iso)
+        local = dt.astimezone()
+        return local.strftime("%a, %b %-d at %-I:%M %p")
+    except Exception:
+        return ""
+
+
 def _email_card(e: dict) -> str:
     imp = e.get("importance", 2)
     color = _IMPORTANCE_COLOR.get(imp, "#6b7280")
@@ -64,7 +74,98 @@ def _email_card(e: dict) -> str:
     </article>"""
 
 
-def render(emails: list[dict], output_path: Path) -> None:
+def _safe_link(url: str, label: str) -> str:
+    if not url:
+        return ""
+    escaped_url = html.escape(url, quote=True)
+    return f'<a href="{escaped_url}">{html.escape(label)}</a>'
+
+
+def _sports_card(item: dict) -> str:
+    source = item.get("source", "Sports")
+    source_link = _safe_link(item.get("url", ""), source) or html.escape(source)
+    detail = item.get("detail", "")
+    detail_html = f"<div class='item-detail'>{html.escape(detail[:220])}</div>" if detail else ""
+    return f"""
+    <article class="brief-card">
+      <div class="item-title">{html.escape(item.get('title', ''))}</div>
+      {detail_html}
+      <div class="meta-row"><span class="source-badge">S</span><span>{source_link}</span></div>
+    </article>"""
+
+
+def _sports_section(sports: Optional[dict]) -> str:
+    groups = (sports or {}).get("groups", [])
+    group_html = []
+    for group in groups:
+        items = group.get("items", [])
+        if not items:
+            continue
+        cards = "".join(_sports_card(item) for item in items)
+        group_html.append(
+            f"""
+            <div class="brief-group">
+              <h3>{html.escape(group.get('title', 'Sports'))}</h3>
+              {cards}
+            </div>"""
+        )
+
+    body = "".join(group_html) or "<p class='empty'>No high-value sports updates found from the configured sources.</p>"
+    return f"""
+      <section class="section">
+        <h2>Sports</h2>
+        {body}
+      </section>"""
+
+
+def _canvas_card(item: dict) -> str:
+    due = _fmt_due(item.get("due_at", ""))
+    points = item.get("points")
+    points_text = f" / {points:g} pts" if isinstance(points, (int, float)) else ""
+    link = _safe_link(item.get("url", ""), "Canvas")
+    link_html = f'<span class="meta-divider">/</span><span>{link}</span>' if link else ""
+    return f"""
+    <article class="brief-card">
+      <div class="item-title">{html.escape(item.get('title', ''))}</div>
+      <div class="item-detail">{html.escape(item.get('course', 'Canvas'))}</div>
+      <div class="meta-row">
+        <span class="badge">{html.escape(item.get('kind', 'Assignment'))}</span>
+        <span>{html.escape(due)}{html.escape(points_text)}</span>
+        {link_html}
+      </div>
+    </article>"""
+
+
+def _canvas_section(canvas: Optional[dict]) -> str:
+    canvas = canvas or {}
+    if not canvas.get("configured"):
+        body = "<p class='empty'>Canvas is not configured. Add CANVAS_BASE_URL and CANVAS_TOKEN to credentials/secrets.env.</p>"
+    elif canvas.get("error"):
+        body = f"<p class='empty'>Canvas could not be fetched: {html.escape(canvas['error'])}</p>"
+    else:
+        group_html = []
+        for group in canvas.get("groups", []):
+            items = group.get("items", [])
+            cards = "".join(_canvas_card(item) for item in items) or "<p class='empty'>Nothing in this group.</p>"
+            group_html.append(
+                f"""
+                <div class="brief-group">
+                  <h3>{html.escape(group.get('title', 'Canvas'))}</h3>
+                  {cards}
+                </div>"""
+            )
+        body = "".join(group_html) or "<p class='empty'>No unsubmitted Canvas work found.</p>"
+
+    return f"""
+      <section class="section">
+        <h2>Canvas Assignments</h2>
+        {body}
+      </section>"""
+
+
+def render(emails: list[dict], output_path: Path, sports: Optional[dict] = None, canvas: Optional[dict] = None) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     now = datetime.now()
     date_str = now.strftime("%A, %B %-d")
     time_str = now.strftime("%-I:%M %p")
@@ -74,6 +175,8 @@ def render(emails: list[dict], output_path: Path) -> None:
 
     urgent_html = "".join(_email_card(e) for e in urgent) or "<p class='empty'>Nothing urgent.</p>"
     rest_html   = "".join(_email_card(e) for e in rest)   or "<p class='empty'>No other emails.</p>"
+    sports_html = _sports_section(sports)
+    canvas_html = _canvas_section(canvas)
 
     total = len(emails)
     unread = sum(1 for e in emails if e.get("unread"))
@@ -193,6 +296,43 @@ def render(emails: list[dict], output_path: Path) -> None:
     margin-bottom: 12px;
     padding: 15px 17px 16px;
   }}
+  .brief-group {{
+    margin-bottom: 18px;
+  }}
+  .brief-group:last-child {{
+    margin-bottom: 0;
+  }}
+  h3 {{
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 0 0 9px;
+  }}
+  .brief-card {{
+    background: #fff;
+    border: 1px solid var(--faint);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    padding: 13px 15px 14px;
+  }}
+  .item-title {{
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.4;
+    margin-bottom: 5px;
+  }}
+  .item-detail {{
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 9px;
+  }}
+  a {{
+    color: var(--accent);
+    text-decoration: none;
+  }}
   .card-header {{
     align-items: center;
     display: flex;
@@ -299,6 +439,10 @@ def render(emails: list[dict], output_path: Path) -> None:
         <div class="stat"><b>{unread}</b><span>Unread</span></div>
         <div class="stat"><b>{gmail_count} / {outlook_count}</b><span>Gmail / Outlook</span></div>
       </div>
+
+      {canvas_html}
+
+      {sports_html}
 
       <section class="section urgent-section">
         <h2>Needs Attention</h2>

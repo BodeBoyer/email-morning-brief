@@ -16,6 +16,47 @@ High importance signals: your name mentioned, direct question, deadline, manager
 words like "offer", "start date", "onboarding", "urgent", "please confirm", "interview", "grades".
 Low importance signals: newsletters, marketing, automated notifications, social media alerts."""
 
+_VALID_CATEGORIES = {"Action Required", "FYI", "Meeting", "Internship", "School", "Spam/Promo"}
+
+
+def _sort_emails(emails: list[dict]) -> None:
+    def importance(email: dict) -> int:
+        try:
+            return int(email.get("importance", 2))
+        except (TypeError, ValueError):
+            return 2
+
+    def received_ts(email: dict) -> float:
+        try:
+            return float(email.get("received_ts", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    emails.sort(
+        key=lambda x: (
+            -importance(x),
+            not x.get("unread", False),
+            -received_ts(x),
+        )
+    )
+
+
+def _apply_fallback(emails: list[dict], default_importance: int = 2) -> list[dict]:
+    for e in emails:
+        e["importance"] = 3 if e.get("unread") else default_importance
+        e["category"] = "FYI"
+        e["one_liner"] = str(e.get("snippet", ""))[:120]
+    _sort_emails(emails)
+    return emails
+
+
+def _coerce_importance(value) -> int:
+    try:
+        importance = int(value)
+    except (TypeError, ValueError):
+        return 2
+    return min(5, max(1, importance))
+
 
 def rank_and_summarize(emails: list[dict]) -> list[dict]:
     if not emails:
@@ -23,12 +64,7 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
 
     if not config.ANTHROPIC_API_KEY:
         print("[Claude] ANTHROPIC_API_KEY not set — skipping AI ranking, using unread as proxy")
-        for e in emails:
-            e["importance"] = 3 if e.get("unread") else 1
-            e["category"] = "FYI"
-            e["one_liner"] = e["snippet"][:120]
-        emails.sort(key=lambda x: (-x["importance"], not x.get("unread", False), -x["received_ts"]))
-        return emails
+        return _apply_fallback(emails, default_importance=1)
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -53,20 +89,18 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
         + json.dumps(email_list, indent=2)
     )
 
-    response = client.messages.create(
-        model=config.CLAUDE_MODEL,
-        max_tokens=4096,
-        system=[
-            {
-                "type": "text",
-                "text": _SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        messages=[{"role": "user", "content": user_message}],
-    )
+    try:
+        response = client.messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=4096,
+            system=_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        raw = response.content[0].text.strip()
+    except Exception as exc:
+        print(f"[Claude] API error ({exc}) — falling back to snippet defaults")
+        return _apply_fallback(emails)
 
-    raw = response.content[0].text.strip()
     # Strip markdown fences if present
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -78,20 +112,25 @@ def rank_and_summarize(emails: list[dict]) -> list[dict]:
         ranked = json.loads(raw)
     except json.JSONDecodeError as exc:
         print(f"[Claude] Failed to parse response as JSON ({exc}) — falling back to snippet defaults")
-        for e in emails:
-            e.setdefault("importance", 2)
-            e.setdefault("category", "FYI")
-            e.setdefault("one_liner", e["snippet"][:120])
-        emails.sort(key=lambda x: (-x["importance"], not x.get("unread", False), -x["received_ts"]))
-        return emails
+        return _apply_fallback(emails)
 
-    ranked_by_id = {r["id"]: r for r in ranked}
+    if not isinstance(ranked, list):
+        print("[Claude] Response was not a JSON array — falling back to snippet defaults")
+        return _apply_fallback(emails)
+
+    ranked_by_id = {
+        str(r.get("id")): r
+        for r in ranked
+        if isinstance(r, dict) and r.get("id") is not None
+    }
     for e in emails:
-        info = ranked_by_id.get(e["id"], {})
-        e["importance"] = info.get("importance", 2)
-        e["category"] = info.get("category", "FYI")
-        e["one_liner"] = info.get("one_liner", e["snippet"][:120])
+        info = ranked_by_id.get(str(e.get("id")), {})
+        category = info.get("category", "FYI")
+        one_liner = info.get("one_liner", e.get("snippet", "")[:120])
+        e["importance"] = _coerce_importance(info.get("importance", 2))
+        e["category"] = category if category in _VALID_CATEGORIES else "FYI"
+        e["one_liner"] = str(one_liner)[:200]
 
     # Sort: importance desc, then unread first, then recency
-    emails.sort(key=lambda x: (-x["importance"], not x.get("unread", False), -x["received_ts"]))
+    _sort_emails(emails)
     return emails

@@ -4,3 +4,4 @@ google-auth-oauthlib>=1.2.0
 google-api-python-client>=2.120.0
 msal>=1.28.0
 requests>=2.31.0
+urllib3<2
