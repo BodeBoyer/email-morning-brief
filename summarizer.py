@@ -52,6 +52,19 @@ DO NOT create both an event AND a task for the same thing. If it has a specific 
 event. If not, it is a task. If the email is purely informational (newsletter, FYI, grade
 notification with no required follow-up), do not create either.
 
+CONSOLIDATE related tasks. Do not emit one task per email when several emails are about the
+same underlying action. Group aggressively when:
+  - Multiple reminders/follow-ups about the same form, deadline, or reply → ONE task.
+  - Multiple emails in a thread about the same decision → ONE task tied to the latest message.
+  - IF (and only if) a grade notification warrants a task at all under the rule above, and
+    multiple such notifications come from the same course, collapse them into ONE task per
+    course using the stable title "Check {{COURSE}} released grades on Canvas" with notes
+    listing each assignment name. Purely informational grade notifications with no required
+    follow-up still produce no task.
+Pick the most recent email as `source_id` and list the other assignment/email names in `notes`
+so the user has full context in one place. Aim for fewer, higher-signal tasks rather than many
+narrow ones.
+
 High importance signals: your name mentioned, direct question, deadline, manager/recruiter/professor sending,
 words like "offer", "start date", "onboarding", "urgent", "please confirm", "interview", "grades".
 Low importance signals: newsletters, marketing, automated notifications, social media alerts.

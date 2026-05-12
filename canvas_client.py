@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time as _time
 from datetime import datetime, time, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -20,8 +21,17 @@ def _canvas_get(path: str, params: Optional[dict] = None) -> list:
     headers = {"Authorization": f"Bearer {config.CANVAS_TOKEN}"}
     results = []
     while url:
-        resp = requests.get(url, headers=headers, params=params, timeout=20)
-        resp.raise_for_status()
+        last_exc: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                resp = requests.get(url, headers=headers, params=params, timeout=45)
+                resp.raise_for_status()
+                break
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_exc = exc
+                _time.sleep(2 ** attempt)
+        else:
+            raise last_exc  # type: ignore[misc]
         results.extend(resp.json())
         url = resp.links.get("next", {}).get("url")
         params = None
